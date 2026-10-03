@@ -120,7 +120,7 @@ export class ApplicationService {
     const app = await this.findById(id);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
-    if (!this.canTransition(app.status, nextStatus, user.role)) {
+    if (!this.canTransition(app.status as Status, nextStatus, user.role as Role)) {
       throw new ForbiddenError(`Cannot transition from ${app.status} to ${nextStatus}`);
     }
 

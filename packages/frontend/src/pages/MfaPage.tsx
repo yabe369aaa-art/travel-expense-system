@@ -38,6 +38,7 @@ export function MfaPage() {
     watch,
   } = useForm<MfaForm>({
     resolver: zodResolver(mfaSchema),
+    defaultValues: { code: '' },
   });
 
   const code = watch('code');
@@ -129,7 +130,7 @@ export function MfaPage() {
                     }
                   }}
                   ref={(el) => { codeInputsRef.current[i] = el!; }}
-                  defaultValue={code[i]}
+                  defaultValue={code?.[i] || ''}
                   disabled={isLoading}
                   autoComplete="one-time-code"
                   autoFocus={i === 0}

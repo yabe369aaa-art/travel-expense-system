@@ -1,9 +1,26 @@
-import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+﻿import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import type { Application, Detail, PaginatedResponse, TransferAssistData, User, CommuterPass, LoginResponse } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-export const api = axios.create({
+export interface RouteStation {
+  id: string;
+  name: string;
+  area: string;
+}
+
+export interface RouteCandidate {
+  id: string;
+  label: string;
+  departurePlace: string;
+  arrivalPlace: string;
+  viaStations: string[];
+  durationMinutes: number;
+  fare: number;
+  provider: 'mock';
+}
+
+const axiosClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -28,7 +45,7 @@ const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue = [];
 };
 
-api.interceptors.request.use(
+axiosClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const accessToken = localStorage.getItem('accessToken');
     if (accessToken && config.headers) {
@@ -39,8 +56,8 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-api.interceptors.response.use(
-  (response: AxiosResponse) => response.data,
+axiosClient.interceptors.response.use(
+  (response: AxiosResponse) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
@@ -50,9 +67,9 @@ api.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         }).then((token) => {
           if (originalRequest.headers && token) {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
+            originalRequest.headers.Authorization = `Bearer ${String(token)}`;
           }
-          return api(originalRequest);
+          return axiosClient(originalRequest);
         }).catch((err) => {
           return Promise.reject(err);
         });
@@ -76,7 +93,7 @@ api.interceptors.response.use(
         }
 
         processQueue(null, accessToken);
-        return api(originalRequest);
+        return axiosClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
         localStorage.removeItem('accessToken');
@@ -93,50 +110,63 @@ api.interceptors.response.use(
   }
 );
 
+export const api = {
+  get: <T = unknown>(url: string, config?: AxiosRequestConfig) =>
+    axiosClient.get<T>(url, config).then((response) => response.data),
+  post: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+    axiosClient.post<T>(url, data, config).then((response) => response.data),
+  put: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+    axiosClient.put<T>(url, data, config).then((response) => response.data),
+  patch: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+    axiosClient.patch<T>(url, data, config).then((response) => response.data),
+  delete: <T = unknown>(url: string, config?: AxiosRequestConfig) =>
+    axiosClient.delete<T>(url, config).then((response) => response.data),
+};
+
 // Auth API - return data directly since interceptor unwraps response.data
 export const authApi = {
-  login: (email: string, password: string) => 
-    api.post<LoginResponse>('/auth/login', { email, password }).then(r => r.data),
-  sendMfa: (email: string) => 
-    api.post<{ message: string }>('/auth/mfa/send', { email }).then(r => r.data),
-  verifyMfa: (email: string, code: string) => 
-    api.post<LoginResponse>('/auth/mfa/verify', { email, code }).then(r => r.data),
-  refresh: (refreshToken: string) => 
-    api.post<LoginResponse>('/auth/refresh', { refreshToken }).then(r => r.data),
-  getMe: () => 
-    api.get<{ user: User }>('/auth/me').then(r => r.data),
-  entraLogin: () => 
-    api.get<void>('/auth/entra_id').then(r => r.data),
+  login: (email: string, password: string) =>
+    api.post<LoginResponse>('/auth/login', { email, password }),
+  sendMfa: (email: string) =>
+    api.post<{ message: string }>('/auth/mfa/send', { email }),
+  verifyMfa: (email: string, code: string) =>
+    api.post<LoginResponse>('/auth/mfa/verify', { email, code }),
+  refresh: (refreshToken: string) =>
+    api.post<LoginResponse>('/auth/refresh', { refreshToken }),
+  getMe: () =>
+    api.get<{ user: User }>('/auth/me'),
+  entraLogin: () =>
+    api.get<void>('/auth/entra_id'),
 };
 
 // Application API
 export const applicationApi = {
   list: (params?: { page?: number; limit?: number; status?: string; search?: string; sortBy?: string; sortOrder?: string }) =>
-    api.get<PaginatedResponse<Application>>('/applications', { params }).then(r => r.data),
+    api.get<PaginatedResponse<Application>>('/applications', { params }),
   get: (id: string) =>
-    api.get<Application>(`/applications/${id}`).then(r => r.data),
+    api.get<Application>(`/applications/${id}`),
   create: (data: { targetUserId: string; title: string }) =>
-    api.post<Application>('/applications', data).then(r => r.data),
+    api.post<Application>('/applications', data),
   update: (id: string, data: { title?: string }) =>
-    api.patch<Application>(`/applications/${id}`, data).then(r => r.data),
+    api.patch<Application>(`/applications/${id}`, data),
   submit: (id: string) =>
-    api.post<Application>(`/applications/${id}/submit`).then(r => r.data),
+    api.post<Application>(`/applications/${id}/submit`),
   approve: (id: string) =>
-    api.post<Application>(`/applications/${id}/approve`).then(r => r.data),
+    api.post<Application>(`/applications/${id}/approve`),
   reject: (id: string, comment: string) =>
-    api.post<Application>(`/applications/${id}/reject`, { comment }).then(r => r.data),
+    api.post<Application>(`/applications/${id}/reject`, { comment }),
   transfer: (id: string) =>
-    api.post<Application>(`/applications/${id}/transfer`).then(r => r.data),
+    api.post<Application>(`/applications/${id}/transfer`),
   delete: (id: string) =>
-    api.delete<void>(`/applications/${id}`).then(r => r.data),
+    api.delete<void>(`/applications/${id}`),
   getTransferAssist: (id: string) =>
-    api.get<TransferAssistData>(`/applications/${id}/transfer-assist`).then(r => r.data),
+    api.get<TransferAssistData>(`/applications/${id}/transfer-assist`),
 };
 
 // Detail API
 export const detailApi = {
   list: (applicationId: string) =>
-    api.get<Detail[]>(`/details/application/${applicationId}`).then(r => r.data),
+    api.get<Detail[]>(`/details/application/${applicationId}`),
   create: (applicationId: string, data: {
     transportType: string;
     useDate: string;
@@ -147,7 +177,7 @@ export const detailApi = {
     gpsDistanceKm?: number;
     receiptFileUrl?: string;
     purpose?: string;
-  }) => api.post<Detail>(`/details/application/${applicationId}`, data).then(r => r.data),
+  }) => api.post<Detail>(`/details/application/${applicationId}`, data),
   update: (id: string, data: Partial<{
     transportType: string;
     useDate: string;
@@ -158,41 +188,50 @@ export const detailApi = {
     gpsDistanceKm: number | null;
     receiptFileUrl: string | null;
     purpose: string | null;
-  }>) => api.patch<Detail>(`/details/${id}`, data).then(r => r.data),
+  }>) => api.patch<Detail>(`/details/${id}`, data),
   delete: (id: string) =>
-    api.delete<void>(`/details/${id}`).then(r => r.data),
+    api.delete<void>(`/details/${id}`),
   duplicate: (id: string, useDate: string) =>
-    api.post<Detail>(`/details/${id}/duplicate`, { useDate }).then(r => r.data),
+    api.post<Detail>(`/details/${id}/duplicate`, { useDate }),
   bulkDuplicate: (detailId: string, useDates: string[]) =>
-    api.post<Detail[]>('/details/bulk-duplicate', { detailId, useDates }).then(r => r.data),
+    api.post<Detail[]>('/details/bulk-duplicate', { detailId, useDates }),
   searchHistory: (params: { departurePlace?: string; arrivalPlace?: string; transportType?: string; limit?: number; offset?: number }) =>
-    api.get<PaginatedResponse<Detail>>('/details/search/history', { params }).then(r => r.data),
+    api.get<PaginatedResponse<Detail>>('/details/search/history', { params }),
   reuseRoute: (sourceDetailId: string, newUseDate: string) =>
-    api.post<{ application: Application; detail: Detail }>('/details/reuse', { sourceDetailId, newUseDate }).then(r => r.data),
+    api.post<{ application: Application; detail: Detail }>('/details/reuse', { sourceDetailId, newUseDate }),
   calculateCarFare: (departurePlace: string, arrivalPlace: string) =>
-    api.post<{ distance: number; fare: number }>('/details/calculate-car-fare', { departurePlace, arrivalPlace }).then(r => r.data),
+    api.post<{ distance: number; fare: number }>('/details/calculate-car-fare', { departurePlace, arrivalPlace }),
+};
+
+export const routeSearchApi = {
+  searchStations: (query: string) =>
+    api.get<{ items: RouteStation[] }>('/details/routes/stations', { params: { query } }),
+  searchRoutes: (departurePlace: string, arrivalPlace: string) =>
+    api.get<{ provider: 'mock'; items: RouteCandidate[] }>('/details/routes/search', {
+      params: { departurePlace, arrivalPlace },
+    }),
 };
 
 // User API
 export const userApi = {
   getCommuterPass: () =>
-    api.get<CommuterPass | null>('/users/me/commuter-pass').then(r => r.data),
+    api.get<CommuterPass | null>('/users/me/commuter-pass'),
   updateCommuterPass: (data: { routeText?: string; teikiProfile: string; expiredAt: string }) =>
-    api.put<CommuterPass>('/users/me/commuter-pass', data).then(r => r.data),
+    api.put<CommuterPass>('/users/me/commuter-pass', data),
   getUserCommuterPass: (userId: string) =>
-    api.get<CommuterPass | null>(`/users/${userId}/commuter-pass`).then(r => r.data),
+    api.get<CommuterPass | null>(`/users/${userId}/commuter-pass`),
   list: (params?: { page?: number; limit?: number; role?: string }) =>
-    api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
+    api.get<PaginatedResponse<User>>('/users', { params }),
 };
 
 // File API
 export const fileApi = {
   getPresignedUrl: (fileName: string, contentType: string, fileSize: number) =>
-    api.post<{ uploadUrl: string; fileKey: string }>('/files/presigned-url', { fileName, contentType, fileSize }).then(r => r.data),
+    api.post<{ uploadUrl: string; fileKey: string }>('/files/presigned-url', { fileName, contentType, fileSize }),
   getViewUrl: (fileKey: string) =>
-    api.get<{ url: string }>(`/files/view/${fileKey}`).then(r => r.data),
+    api.get<{ url: string }>(`/files/view/${fileKey}`),
   delete: (fileKey: string) =>
-    api.delete<void>(`/files/${fileKey}`).then(r => r.data),
+    api.delete<void>(`/files/${fileKey}`),
 };
 
 export function uploadToS3(uploadUrl: string, file: File): Promise<void> {

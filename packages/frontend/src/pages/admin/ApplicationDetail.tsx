@@ -18,6 +18,8 @@ import { useState } from 'react';
 export function AdminApplicationDetail() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const [rejectComment, setRejectComment] = useState('');
+  const [rejectOpen, setRejectOpen] = useState(false);
 
   const { data: application, isLoading } = useQuery({
     queryKey: ['application', id],
@@ -55,8 +57,6 @@ export function AdminApplicationDetail() {
 
   const app = application as Application;
   const isPending = app.status === 'pending';
-  const [rejectComment, setRejectComment] = useState('');
-  const [rejectOpen, setRejectOpen] = useState(false);
 
   const handleReject = () => {
     if (!rejectComment.trim()) return;

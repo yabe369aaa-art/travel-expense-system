@@ -113,16 +113,14 @@ process.on('SIGINT', shutdown);
 
 export default app;
 
-// Start server if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  try {
-    await app.listen({ port: env.PORT, host: '0.0.0.0' });
-    app.log.info(`🚀 Server running on http://localhost:${env.PORT}`);
-    app.log.info(`📚 Swagger docs at http://localhost:${env.PORT}/docs`);
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
+// Start server
+try {
+  await app.listen({ port: env.PORT, host: '0.0.0.0' });
+  app.log.info(`🚀 Server running on http://localhost:${env.PORT}`);
+  app.log.info(`📚 Swagger docs at http://localhost:${env.PORT}/docs`);
+} catch (err) {
+  app.log.error(err);
+  process.exit(1);
 }
 
 declare module 'fastify' {

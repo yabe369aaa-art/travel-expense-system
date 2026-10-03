@@ -25,7 +25,10 @@ export async function applicationRoutes(fastify: FastifyInstance) {
   const appService = new ApplicationService();
   const detailService = new DetailService();
 
-  fastify.get('/', { preHandler: authenticate }, async (request, reply) => {
+  fastify.get('/', { 
+    preHandler: authenticate,
+    schema: { querystring: paginatedQuerySchema },
+  }, async (request, reply) => {
     const query = request.query as PaginatedQuery;
     const user = request.user!;
     
@@ -39,8 +42,8 @@ export async function applicationRoutes(fastify: FastifyInstance) {
     const result = await appService.findMany({
       ...where,
       ...restQuery,
-      page,
-      limit,
+      page: Number(page),
+      limit: Number(limit),
       sortBy,
       sortOrder,
     } as Parameters<typeof appService.findMany>[0]);

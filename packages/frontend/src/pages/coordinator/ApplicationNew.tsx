@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { Controller, useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2, Copy } from 'lucide-react';
+import { RoutePlanner } from '@/components/RoutePlanner';
 
 const transportTypes = [
   { value: 'train', label: '電車' },
@@ -154,7 +155,7 @@ export function CoordinatorApplicationNew() {
           </CardHeader>
           <CardContent>
             {fields.map((field, index) => (
-              <DetailRow key={field.id} index={index} field={field} remove={remove} move={move} fields={fields} register={register} setValue={setValue} />
+              <DetailRow key={field.id} index={index} field={field} remove={remove} move={move} fields={fields} control={control} register={register} setValue={setValue} />
             ))}
 
             {fields.length === 0 && (
@@ -190,6 +191,7 @@ function DetailRow({
   remove,
   move,
   fields,
+  control,
   register,
   setValue,
 }: {
@@ -198,9 +200,16 @@ function DetailRow({
   remove: (index: number) => void;
   move: (from: number, to: number) => void;
   fields: Array<{ id: string }>;
+  control: ReturnType<typeof useForm<FormData>>['control'];
   register: ReturnType<typeof useForm<FormData>>['register'];
   setValue: ReturnType<typeof useForm<FormData>>['setValue'];
 }) {
+  const indexPath = `details.${index}` as const;
+  const departurePlace = useWatch({ control, name: `${indexPath}.departurePlace` }) ?? '';
+  const arrivalPlace = useWatch({ control, name: `${indexPath}.arrivalPlace` }) ?? '';
+  const transportType = useWatch({ control, name: `${indexPath}.transportType` });
+  const routeSerializeData = useWatch({ control, name: `${indexPath}.routeSerializeData` });
+
   return (
     <div className="border rounded-lg p-4 space-y-4 bg-card">
       <div className="flex items-center justify-between">
@@ -215,17 +224,26 @@ function DetailRow({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>交通手段</Label>
-          <Select
-            {...register(`details.${index}.transportType`)}
-            onValueChange={(v) => setValue(`details.${index}.transportType`, v as "train" | "bus" | "plane" | "car", { shouldValidate: true })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="選択" />
-            </SelectTrigger>
-            <SelectContent>
-              {transportTypes.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Controller
+            control={control}
+            name={`details.${index}.transportType`}
+            render={({ field: transportField }) => (
+              <Select
+                value={transportField.value}
+                onValueChange={(value) => {
+                  transportField.onChange(value);
+                  setValue(`${indexPath}.routeSerializeData`, '');
+                }}
+              >
+                <SelectTrigger ref={transportField.ref}>
+                  <SelectValue placeholder="選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {transportTypes.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </div>
 
         <div className="space-y-2">
@@ -233,15 +251,16 @@ function DetailRow({
           <Input type="date" {...register(`details.${index}.useDate`, { valueAsDate: false })} />
         </div>
 
-        <div className="space-y-2 sm:col-span-2">
-          <Label>出発地</Label>
-          <Input placeholder="例: 新宿駅" {...register(`details.${index}.departurePlace`)} />
-        </div>
-
-        <div className="space-y-2 sm:col-span-2">
-          <Label>到着地</Label>
-          <Input placeholder="例: 大阪駅" {...register(`details.${index}.arrivalPlace`)} />
-        </div>
+        <RoutePlanner
+          transportType={transportType}
+          departurePlace={departurePlace}
+          arrivalPlace={arrivalPlace}
+          routeSerializeData={routeSerializeData}
+          onDeparturePlaceChange={(value) => setValue(`${indexPath}.departurePlace`, value, { shouldDirty: true, shouldValidate: true })}
+          onArrivalPlaceChange={(value) => setValue(`${indexPath}.arrivalPlace`, value, { shouldDirty: true, shouldValidate: true })}
+          onRouteSerializeDataChange={(value) => setValue(`${indexPath}.routeSerializeData`, value, { shouldDirty: true })}
+          onFareChange={(value) => setValue(`${indexPath}.reimbursementFare`, value, { shouldDirty: true, shouldValidate: true })}
+        />
 
         <div className="space-y-2">
           <Label>支給金額 (円)</Label>

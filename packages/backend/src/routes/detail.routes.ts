@@ -11,6 +11,7 @@ import {
 } from '../schemas/index.js';
 import { AppError, ForbiddenError, NotFoundError } from '../middleware/error.js';
 import { prisma } from '../config/prisma.js';
+import { RouteSearchService } from '../services/route-search.service.js';
 
 type CreateDetail = z.infer<typeof createDetailSchema>;
 type UpdateDetail = z.infer<typeof updateDetailSchema>;
@@ -24,6 +25,34 @@ interface ParamsApplicationId { applicationId: string; }
 
 export async function detailRoutes(fastify: FastifyInstance) {
   const detailService = new DetailService();
+  const routeSearchService = new RouteSearchService();
+
+  fastify.get('/routes/stations', {
+    preHandler: authenticate,
+    schema: { querystring: z.object({ query: z.string().trim().min(1).max(100) }) },
+  }, async (request, reply) => {
+    const { query } = request.query as { query: string };
+    return reply.send({ items: routeSearchService.searchStations(query) });
+  });
+
+  fastify.get('/routes/search', {
+    preHandler: authenticate,
+    schema: {
+      querystring: z.object({
+        departurePlace: z.string().trim().min(1).max(255),
+        arrivalPlace: z.string().trim().min(1).max(255),
+      }),
+    },
+  }, async (request, reply) => {
+    const { departurePlace, arrivalPlace } = request.query as {
+      departurePlace: string;
+      arrivalPlace: string;
+    };
+    return reply.send({
+      provider: 'mock',
+      items: routeSearchService.searchRoutes(departurePlace, arrivalPlace),
+    });
+  });
 
   fastify.get('/application/:applicationId', { preHandler: authenticate }, async (request, reply) => {
     const params = request.params as ParamsApplicationId;
