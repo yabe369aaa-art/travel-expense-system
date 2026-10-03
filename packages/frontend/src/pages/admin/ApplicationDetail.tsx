@@ -1,19 +1,19 @@
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { applicationApi } from '@/lib/api';
+import { applicationApi, routeSearchApi, type CarRouteResult } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, FileText, MapPin, CheckCircle, XCircle, Clock, Loader2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, FileText, MapPin, CheckCircle, XCircle, Clock, Loader2, ArrowRight, Map } from 'lucide-react';
 import { formatCurrency, formatDateShort, formatDateTime, getStatusLabel, getStatusColor, getTransportLabel, getTransportIcon } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import type { Application, Detail, History } from '@/types';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function AdminApplicationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -130,6 +130,10 @@ export function AdminApplicationDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {app.details && app.details.some((d: Detail) => d.transportType === 'car' && d.routeSerializeData) && (
+            <CarRouteMaps details={app.details.filter((d: Detail) => d.transportType === 'car' && d.routeSerializeData)} />
+          )}
 
           <Card>
             <CardHeader>
@@ -269,5 +273,119 @@ function HistoryItem({ history }: { history: History }) {
         )}
       </div>
     </div>
+  );
+}
+
+function parseCarRoute(serialized?: string): CarRouteResult | null {
+  if (!serialized) return null;
+  try {
+    return JSON.parse(serialized) as CarRouteResult;
+  } catch {
+    return null;
+  }
+}
+
+function CarRouteMaps({ details }: { details: Detail[] }) {
+  const [mapUrls, setMapUrls] = useState<Record<string, string>>({});
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  const [errorIds, setErrorIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const loadMaps = async () => {
+      for (const detail of details) {
+        if (!detail.routeSerializeData) continue;
+        const route = parseCarRoute(detail.routeSerializeData);
+        if (!route || route.path.length === 0) continue;
+
+        setLoadingIds(prev => new Set(prev).add(detail.id));
+        try {
+          const markers = JSON.stringify(
+            route.waypoints.map((wp, index) => ({
+              lat: wp.lat,
+              lng: wp.lng,
+              label: String.fromCharCode(65 + index),
+              color: index === 0 ? 'green' : index === route.waypoints.length - 1 ? 'red' : 'blue',
+            }))
+          );
+          const path = JSON.stringify(route.path);
+          const result = await routeSearchApi.getStaticMap({
+            centerLat: route.waypoints[0]?.lat || 0,
+            centerLng: route.waypoints[0]?.lng || 0,
+            zoom: 12,
+            width: 800,
+            height: 600,
+            markers,
+            path,
+          });
+          setMapUrls(prev => ({ ...prev, [detail.id]: result.mapUrl }));
+        } catch {
+          setErrorIds(prev => new Set(prev).add(detail.id));
+        } finally {
+          setLoadingIds(prev => {
+            const next = new Set(prev);
+            next.delete(detail.id);
+            return next;
+          });
+        }
+      }
+    };
+    loadMaps();
+  }, [details]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>自家用車経路地図</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {details.map((detail) => (
+            <div key={detail.id} className="space-y-2">
+              <p className="font-medium text-sm">
+                {formatDateShort(detail.useDate)}: {detail.departurePlace} → {detail.arrivalPlace}
+              </p>
+              {loadingIds.has(detail.id) && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  地図を生成中...
+                </div>
+              )}
+              {errorIds.has(detail.id) && (
+                <div className="rounded-md border bg-destructive/10 p-4 text-center">
+                  <p className="text-sm text-destructive">地図の読み込みに失敗しました</p>
+                </div>
+              )}
+              {mapUrls[detail.id] && !loadingIds.has(detail.id) && !errorIds.has(detail.id) && (
+                <div className="rounded-md border overflow-hidden">
+                  <img
+                    src={mapUrls[detail.id]}
+                    alt={`ルート地図: ${detail.departurePlace} → ${detail.arrivalPlace}`}
+                    className="w-full h-auto max-h-96 object-cover"
+                    onError={() => {
+                      setErrorIds(prev => new Set(prev).add(detail.id));
+                      setMapUrls(prev => {
+                        const next = { ...prev };
+                        delete next[detail.id];
+                        return next;
+                      });
+                    }}
+                  />
+                  <div className="p-2 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(mapUrls[detail.id], '_blank')}
+                    >
+                      <Map className="mr-2 h-4 w-4" />
+                      別タブで開く
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -180,18 +180,23 @@ export function CarRoutePlanner({
   const [mapUrl, setMapUrl] = useState<string | null>(null);
   const [isGeneratingMap, setIsGeneratingMap] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState(false);
 
   const selectedRoute = parseSelectedRoute(routeSerializeData);
 
   useEffect(() => {
-    if (selectedRoute) {
+    if (selectedRoute && selectedRoute.path.length > 0) {
       setRouteResult(selectedRoute);
       generateStaticMap(selectedRoute);
     }
   }, [selectedRoute]);
 
   const generateStaticMap = useCallback(async (route: CarRouteResult) => {
+    // ガード: pathが空、または生成中はスキップ
+    if (route.path.length === 0 || isGeneratingMap) return;
+    
     setIsGeneratingMap(true);
+    setMapLoadError(false);
     try {
       const markers: StaticMapParams['markers'] = JSON.stringify(
         route.waypoints.map((wp, index) => ({
@@ -217,7 +222,7 @@ export function CarRoutePlanner({
     } finally {
       setIsGeneratingMap(false);
     }
-  }, []);
+  }, [isGeneratingMap]);
 
   const handleCalculateRoute = async () => {
     if (!departurePlace.trim() || !arrivalPlace.trim()) {
@@ -418,13 +423,24 @@ export function CarRoutePlanner({
             </p>
           </div>
 
-          {mapUrl && !isGeneratingMap && (
+          {mapUrl && !isGeneratingMap && !mapLoadError && (
             <div className="rounded-md border overflow-hidden">
               <img
                 src={mapUrl}
                 alt="ルート地図"
                 className="w-full h-auto max-h-96 object-cover"
+                onError={() => {
+                  setMapLoadError(true);
+                  setMapUrl(null);
+                }}
               />
+            </div>
+          )}
+
+          {mapLoadError && (
+            <div className="rounded-md border bg-destructive/10 p-4 text-center">
+              <p className="text-sm text-destructive">地図の読み込みに失敗しました（URLが長すぎるか、APIキーの問題です）</p>
+              <p className="text-xs text-muted-foreground mt-1">経路データは正常に取得されています</p>
             </div>
           )}
 

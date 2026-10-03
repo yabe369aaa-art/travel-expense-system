@@ -68,8 +68,9 @@ await app.register(fastifyCors, {
 });
 
 await app.register(fastifyRateLimit, {
-  max: 100,
+  max: env.NODE_ENV === 'development' ? 10000 : 100,
   timeWindow: '1 minute',
+  keyGenerator: (request) => request.ip,
 });
 
 await app.register(fastifyJwt, {

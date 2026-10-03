@@ -190,35 +190,45 @@ export class GoogleMapsService {
     try {
       const allWaypoints = waypoints.filter((w) => w.trim()).map((w) => w.trim());
 
+      // Build params without undefined waypoints
+      const params: {
+        origin: string;
+        destination: string;
+        mode: TravelMode;
+        key: string;
+        language: Language;
+        waypoints?: string[];
+      } = {
+        origin,
+        destination,
+        mode: TravelMode.driving,
+        key: this.apiKey,
+        language: Language.ja,
+      };
+      if (allWaypoints.length > 0) {
+        params.waypoints = allWaypoints;
+      }
+
       const response = await googleMapsClient.directions({
-        params: {
-          origin,
-          destination,
-          waypoints: allWaypoints.length > 0 ? allWaypoints : undefined,
-          mode: TravelMode.driving,
-          key: this.apiKey,
-          language: Language.ja,
-        },
+        params,
       });
 
       const route = response.data.routes[0];
       if (!route) return [];
 
       const path: Array<{ lat: number; lng: number }> = [];
+      let lastLat: number | null = null;
+      let lastLng: number | null = null;
+
       route.legs.forEach((leg) => {
         leg.steps.forEach((step) => {
-          if (step.start_location) {
-            path.push({
-              lat: step.start_location.lat,
-              lng: step.start_location.lng,
-            });
-          }
-          if (step.end_location) {
-            path.push({
-              lat: step.end_location.lat,
-              lng: step.end_location.lng,
-            });
-          }
+          [step.start_location, step.end_location].forEach((loc) => {
+            if (loc && (loc.lat !== lastLat || loc.lng !== lastLng)) {
+              path.push({ lat: loc.lat, lng: loc.lng });
+              lastLat = loc.lat;
+              lastLng = loc.lng;
+            }
+          });
         });
       });
 
@@ -239,6 +249,15 @@ export class GoogleMapsService {
   ): Promise<string> {
     this.checkApiKey();
 
+    let finalPath = path;
+    if (finalPath && finalPath.length > 0) {
+      const MAX_PATH_POINTS = 512;
+      if (finalPath.length > MAX_PATH_POINTS) {
+        const step = Math.ceil(finalPath.length / MAX_PATH_POINTS);
+        finalPath = finalPath.filter((_, i) => i % step === 0);
+      }
+    }
+
     const params = new URLSearchParams({
       center: `${center.lat},${center.lng}`,
       zoom: zoom.toString(),
@@ -257,9 +276,8 @@ export class GoogleMapsService {
       params.append('markers', markerParams.join('|'));
     }
 
-    if (path && path.length > 0) {
-      const pathStr = path.map((p) => `${p.lat},${p.lng}`).join('|');
-      params.append('path', `weight:5|color:0x0000ff|enc:${encodePolyline(path)}`);
+    if (finalPath && finalPath.length > 0) {
+      params.append('path', `weight:5|color:0x0000ff|enc:${encodePolyline(finalPath)}`);
     }
 
     return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
