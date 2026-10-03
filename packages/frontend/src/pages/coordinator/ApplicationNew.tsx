@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2, Copy } from 'lucide-react';
 import { RoutePlanner } from '@/components/RoutePlanner';
+import { CarRoutePlanner } from '@/components/CarRoutePlanner';
 
 const transportTypes = [
   { value: 'train', label: '電車' },
@@ -30,6 +31,7 @@ const detailSchema = z.object({
   gpsDistanceKm: z.number().optional(),
   receiptFileUrl: z.string().optional(),
   purpose: z.string().optional(),
+  waypoints: z.array(z.object({ placeId: z.string(), name: z.string() })).optional(),
 });
 
 const formSchema = z.object({
@@ -62,7 +64,7 @@ export function CoordinatorApplicationNew() {
     defaultValues: {
       targetUserId: '',
       title: '',
-      details: [{ transportType: 'train', useDate: '', departurePlace: '', arrivalPlace: '', reimbursementFare: 0 }],
+      details: [{ transportType: 'train', useDate: '', departurePlace: '', arrivalPlace: '', reimbursementFare: 0, waypoints: [] }],
     },
   });
 
@@ -149,7 +151,7 @@ export function CoordinatorApplicationNew() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>交通費明細</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ transportType: 'train', useDate: '', departurePlace: '', arrivalPlace: '', reimbursementFare: 0 })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ transportType: 'train', useDate: '', departurePlace: '', arrivalPlace: '', reimbursementFare: 0, waypoints: [] })}>
               <Plus className="mr-2 h-4 w-4" />明細追加
             </Button>
           </CardHeader>
@@ -209,6 +211,12 @@ function DetailRow({
   const arrivalPlace = useWatch({ control, name: `${indexPath}.arrivalPlace` }) ?? '';
   const transportType = useWatch({ control, name: `${indexPath}.transportType` });
   const routeSerializeData = useWatch({ control, name: `${indexPath}.routeSerializeData` });
+  const waypoints = useWatch({ control, name: `${indexPath}.waypoints` }) ?? [];
+  const gpsDistanceKm = useWatch({ control, name: `${indexPath}.gpsDistanceKm` }) ?? 0;
+
+  const handleWaypointsChange = (newWaypoints: Array<{ placeId: string; name: string }>) => {
+    setValue(`${indexPath}.waypoints`, newWaypoints, { shouldDirty: true });
+  };
 
   return (
     <div className="border rounded-lg p-4 space-y-4 bg-card">
@@ -233,6 +241,7 @@ function DetailRow({
                 onValueChange={(value) => {
                   transportField.onChange(value);
                   setValue(`${indexPath}.routeSerializeData`, '');
+                  setValue(`${indexPath}.waypoints`, []);
                 }}
               >
                 <SelectTrigger ref={transportField.ref}>
@@ -251,21 +260,45 @@ function DetailRow({
           <Input type="date" {...register(`details.${index}.useDate`, { valueAsDate: false })} />
         </div>
 
-        <RoutePlanner
-          transportType={transportType}
-          departurePlace={departurePlace}
-          arrivalPlace={arrivalPlace}
-          routeSerializeData={routeSerializeData}
-          onDeparturePlaceChange={(value) => setValue(`${indexPath}.departurePlace`, value, { shouldDirty: true, shouldValidate: true })}
-          onArrivalPlaceChange={(value) => setValue(`${indexPath}.arrivalPlace`, value, { shouldDirty: true, shouldValidate: true })}
-          onRouteSerializeDataChange={(value) => setValue(`${indexPath}.routeSerializeData`, value, { shouldDirty: true })}
-          onFareChange={(value) => setValue(`${indexPath}.reimbursementFare`, value, { shouldDirty: true, shouldValidate: true })}
-        />
+        {transportType === 'car' ? (
+          <CarRoutePlanner
+            transportType={transportType}
+            departurePlace={departurePlace}
+            arrivalPlace={arrivalPlace}
+            waypoints={waypoints}
+            routeSerializeData={routeSerializeData}
+            onDeparturePlaceChange={(value) => setValue(`${indexPath}.departurePlace`, value, { shouldDirty: true, shouldValidate: true })}
+            onArrivalPlaceChange={(value) => setValue(`${indexPath}.arrivalPlace`, value, { shouldDirty: true, shouldValidate: true })}
+            onWaypointsChange={handleWaypointsChange}
+            onRouteSerializeDataChange={(value) => setValue(`${indexPath}.routeSerializeData`, value, { shouldDirty: true })}
+            onFareChange={(value) => setValue(`${indexPath}.reimbursementFare`, value, { shouldDirty: true, shouldValidate: true })}
+            onDistanceChange={(value) => setValue(`${indexPath}.gpsDistanceKm`, value, { shouldDirty: true })}
+          />
+        ) : (
+          <RoutePlanner
+            transportType={transportType}
+            departurePlace={departurePlace}
+            arrivalPlace={arrivalPlace}
+            routeSerializeData={routeSerializeData}
+            onDeparturePlaceChange={(value) => setValue(`${indexPath}.departurePlace`, value, { shouldDirty: true, shouldValidate: true })}
+            onArrivalPlaceChange={(value) => setValue(`${indexPath}.arrivalPlace`, value, { shouldDirty: true, shouldValidate: true })}
+            onRouteSerializeDataChange={(value) => setValue(`${indexPath}.routeSerializeData`, value, { shouldDirty: true })}
+            onFareChange={(value) => setValue(`${indexPath}.reimbursementFare`, value, { shouldDirty: true, shouldValidate: true })}
+          />
+        )}
 
         <div className="space-y-2">
           <Label>支給金額 (円)</Label>
           <Input type="number" min="0" step="1" {...register(`details.${index}.reimbursementFare`, { valueAsNumber: true })} />
         </div>
+
+        {transportType === 'car' && gpsDistanceKm > 0 && (
+          <div className="space-y-2 sm:col-span-2">
+            <Label>走行距離 (km)</Label>
+            <Input type="number" min="0" step="0.01" value={gpsDistanceKm} readOnly className="bg-muted" />
+            <p className="text-xs text-muted-foreground">Google Maps APIで自動計算された距離です</p>
+          </div>
+        )}
 
         <div className="space-y-2 sm:col-span-2">
           <Label>訪問目的・備考</Label>

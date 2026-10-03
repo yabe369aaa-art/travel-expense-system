@@ -20,6 +20,45 @@ export interface RouteCandidate {
   provider: 'mock';
 }
 
+export interface PlacePrediction {
+  placeId: string;
+  description: string;
+  structuredFormatting: {
+    mainText: string;
+    secondaryText: string;
+  };
+}
+
+export interface CarRouteResult {
+  distanceMeters: number;
+  durationSeconds: number;
+  distanceKm: number;
+  durationMinutes: number;
+  fare: number;
+  path: Array<{ lat: number; lng: number }>;
+  waypoints: Array<{ placeId: string; name: string; lat: number; lng: number }>;
+}
+
+export interface StaticMapParams {
+  centerLat: number;
+  centerLng: number;
+  zoom?: number;
+  width?: number;
+  height?: number;
+  markers?: string;
+  path?: string;
+}
+
+export interface CarRoutePDFData {
+  distanceKm: number;
+  durationMinutes: number;
+  fare: number;
+  departurePlace: string;
+  arrivalPlace: string;
+  waypoints: Array<{ name: string }>;
+  mapImageUrl?: string;
+}
+
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -210,6 +249,14 @@ export const routeSearchApi = {
     api.get<{ provider: 'mock'; items: RouteCandidate[] }>('/details/routes/search', {
       params: { departurePlace, arrivalPlace },
     }),
+  searchPlaces: (query: string) =>
+    api.get<{ items: PlacePrediction[] }>('/details/places/autocomplete', { params: { query } }),
+  calculateCarRoute: (originPlaceId: string, destinationPlaceId: string, waypointPlaceIds?: string[]) =>
+    api.post<CarRouteResult>('/details/routes/car', { originPlaceId, destinationPlaceId, waypointPlaceIds }),
+  getStaticMap: (params: StaticMapParams) =>
+    api.get<{ mapUrl: string }>('/details/routes/car/static-map', { params }),
+  generateCarRoutePDF: (data: CarRoutePDFData) =>
+    api.post<Blob>('/details/routes/car/pdf', data, { responseType: 'blob' }),
 };
 
 // User API

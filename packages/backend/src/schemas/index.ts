@@ -45,6 +45,7 @@ export const detailSchema = z.object({
   gpsDistanceKm: z.number().nullable().optional(),
   receiptFileUrl: z.string().url().nullable().optional(),
   purpose: z.string().max(255).nullable().optional(),
+  waypoints: z.array(z.object({ placeId: z.string(), name: z.string() })).nullable().optional(),
   createdAt: z.date(),
 });
 
@@ -76,6 +77,7 @@ export const createDetailSchema = z.object({
   gpsDistanceKm: z.number().positive().max(999.99).optional(),
   receiptFileUrl: z.string().url().optional(),
   purpose: z.string().max(255).optional(),
+  waypoints: z.array(z.object({ placeId: z.string(), name: z.string() })).optional(),
 });
 
 export const updateDetailSchema = createDetailSchema.partial();

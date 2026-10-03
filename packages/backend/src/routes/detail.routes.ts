@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { DetailService } from '../services/detail.service.js';
+import { GoogleMapsService } from '../services/google-maps.service.js';
+import { PDFService } from '../services/pdf.service.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { 
   createDetailSchema, 
@@ -26,6 +28,8 @@ interface ParamsApplicationId { applicationId: string; }
 export async function detailRoutes(fastify: FastifyInstance) {
   const detailService = new DetailService();
   const routeSearchService = new RouteSearchService();
+  const googleMapsService = new GoogleMapsService();
+  const pdfService = new PDFService();
 
   fastify.get('/routes/stations', {
     preHandler: authenticate,
@@ -153,5 +157,122 @@ export async function detailRoutes(fastify: FastifyInstance) {
     const body = request.body as { departurePlace: string; arrivalPlace: string };
     const result = await detailService.calculateCarFare(body.departurePlace, body.arrivalPlace);
     return reply.send(result);
+  });
+
+  fastify.get('/places/autocomplete', {
+    preHandler: authenticate,
+    schema: { querystring: z.object({ query: z.string().trim().min(1).max(200) }) },
+  }, async (request, reply) => {
+    const { query } = request.query as { query: string };
+    try {
+      const items = await googleMapsService.searchPlaces(query);
+      return reply.send({ items });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '検索に失敗しました';
+      return reply.code(400).send({ error: message });
+    }
+  });
+
+  fastify.post('/routes/car', {
+    preHandler: authenticate,
+    schema: {
+      body: z.object({
+        originPlaceId: z.string(),
+        destinationPlaceId: z.string(),
+        waypointPlaceIds: z.array(z.string()).optional(),
+      }),
+    },
+  }, async (request, reply) => {
+    const body = request.body as {
+      originPlaceId: string;
+      destinationPlaceId: string;
+      waypointPlaceIds?: string[];
+    };
+    try {
+      const result = await googleMapsService.getFullRouteInfo(
+        body.originPlaceId,
+        body.destinationPlaceId,
+        body.waypointPlaceIds || []
+      );
+      return reply.send(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'ルート計算に失敗しました';
+      return reply.code(400).send({ error: message });
+    }
+  });
+
+  fastify.get('/routes/car/static-map', {
+    preHandler: authenticate,
+    schema: {
+      querystring: z.object({
+        centerLat: z.coerce.number(),
+        centerLng: z.coerce.number(),
+        zoom: z.coerce.number().optional(),
+        width: z.coerce.number().optional(),
+        height: z.coerce.number().optional(),
+        markers: z.string().optional(),
+        path: z.string().optional(),
+      }),
+    },
+  }, async (request, reply) => {
+    const { centerLat, centerLng, zoom = 13, width = 800, height = 600, markers, path } = request.query as {
+      centerLat: number;
+      centerLng: number;
+      zoom?: number;
+      width?: number;
+      height?: number;
+      markers?: string;
+      path?: string;
+    };
+    try {
+      const markerArray = markers ? JSON.parse(markers) : [];
+      const pathArray = path ? JSON.parse(path) : [];
+      const mapUrl = await googleMapsService.getStaticMapUrl(
+        { lat: centerLat, lng: centerLng },
+        zoom,
+        markerArray,
+        pathArray,
+        width,
+        height
+      );
+      return reply.send({ mapUrl });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '地図取得に失敗しました';
+      return reply.code(400).send({ error: message });
+    }
+  });
+
+  fastify.post('/routes/car/pdf', {
+    preHandler: authenticate,
+    schema: {
+      body: z.object({
+        distanceKm: z.number(),
+        durationMinutes: z.number(),
+        fare: z.number(),
+        departurePlace: z.string(),
+        arrivalPlace: z.string(),
+        waypoints: z.array(z.object({ name: z.string() })),
+        mapImageUrl: z.string().optional(),
+      }),
+    },
+  }, async (request, reply) => {
+    const body = request.body as {
+      distanceKm: number;
+      durationMinutes: number;
+      fare: number;
+      departurePlace: string;
+      arrivalPlace: string;
+      waypoints: Array<{ name: string }>;
+      mapImageUrl?: string;
+    };
+    try {
+      const pdfBuffer = await pdfService.generateRouteMapPDF(body);
+      reply.header('Content-Type', 'application/pdf');
+      reply.header('Content-Disposition', `attachment; filename="route-map-${Date.now()}.pdf"`);
+      return reply.send(pdfBuffer);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'PDF生成に失敗しました';
+      return reply.code(500).send({ error: message });
+    }
   });
 }

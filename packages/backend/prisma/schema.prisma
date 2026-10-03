@@ -8,19 +8,18 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  authType        String   @default("local")
-  passwordHash    String?
-  entraObjectId   String?  @unique
-  role            String   @default("applicant")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  commuterPass    CommuterPass?
-  applications    Application[] @relation("ApplicantApplications")
-  targetApplications Application[] @relation("TargetApplications")
-  histories       ApplicationHistory[]
+  id                 String               @id @default(uuid())
+  email              String               @unique
+  authType           String               @default("local")
+  passwordHash       String?
+  entraObjectId      String?              @unique
+  role               String               @default("applicant")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  histories          ApplicationHistory[]
+  applications       Application[]        @relation("ApplicantApplications")
+  targetApplications Application[]        @relation("TargetApplications")
+  commuterPass       CommuterPass?
 
   @@map("users")
 }
@@ -36,19 +35,18 @@ model CommuterPass {
 }
 
 model Application {
-  id              String   @id @default(uuid())
-  applicantId     String
-  targetUserId    String
-  title           String
-  status          String   @default("draft")
-  totalAmount     Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  applicant       User     @relation("ApplicantApplications", fields: [applicantId], references: [id])
-  targetUser      User     @relation("TargetApplications", fields: [targetUserId], references: [id])
-  details         Detail[]
-  histories       ApplicationHistory[]
+  id           String               @id @default(uuid())
+  applicantId  String
+  targetUserId String
+  title        String
+  status       String               @default("draft")
+  totalAmount  Int                  @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  histories    ApplicationHistory[]
+  details      Detail[]
+  applicant    User                 @relation("ApplicantApplications", fields: [applicantId], references: [id])
+  targetUser   User                 @relation("TargetApplications", fields: [targetUserId], references: [id])
 
   @@index([applicantId])
   @@index([targetUserId])
@@ -57,20 +55,20 @@ model Application {
 }
 
 model Detail {
-  id                   String   @id @default(uuid())
-  applicationId        String
-  transportType        String
-  useDate              DateTime
-  departurePlace       String
-  arrivalPlace         String
-  reimbursementFare    Int
-  routeSerializeData   String?
-  gpsDistanceKm        Float?
-  receiptFileUrl       String?
-  purpose              String?
-  createdAt            DateTime @default(now())
-
-  application          Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  id                 String      @id @default(uuid())
+  applicationId      String
+  transportType      String
+  useDate            DateTime
+  departurePlace     String
+  arrivalPlace       String
+  reimbursementFare  Int
+  routeSerializeData String?
+  gpsDistanceKm      Float?
+  receiptFileUrl     String?
+  purpose            String?
+  createdAt          DateTime    @default(now())
+  waypoints          Json?
+  application        Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
   @@index([departurePlace, arrivalPlace, transportType])
@@ -78,13 +76,12 @@ model Detail {
 }
 
 model ApplicationHistory {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   applicationId String
   operatorId    String
   action        String
   comment       String?
-  createdAt     DateTime @default(now())
-
+  createdAt     DateTime    @default(now())
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   operator      User        @relation(fields: [operatorId], references: [id])
 
