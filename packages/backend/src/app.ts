@@ -43,7 +43,26 @@ await app.register(fastifyHelmet, {
 });
 
 await app.register(fastifyCors, {
-  origin: env.FRONTEND_URL,
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    
+    const allowedOrigins = [
+      env.FRONTEND_URL,
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      /\.trycloudflare\.com$/,
+    ];
+    
+    const isAllowed = allowedOrigins.some(allowed => 
+      typeof allowed === 'string' ? allowed === origin : allowed.test(origin)
+    );
+    
+    if (isAllowed) {
+      cb(null, true);
+    } else {
+      cb(new Error(`CORS: Origin ${origin} not allowed`), false);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
