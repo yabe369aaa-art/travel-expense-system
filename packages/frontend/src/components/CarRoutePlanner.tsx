@@ -55,17 +55,26 @@ function PlaceAutocompleteInput({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [debouncedValue, setDebouncedValue] = useState(value);
 
-  const { data, isFetching } = useQuery({
-    queryKey: ['places-autocomplete', value],
-    queryFn: () => routeSearchApi.searchPlaces(value),
-    enabled: isOpen && value.trim().length > 0,
-    staleTime: 60_000,
-  });
+  // デバウンス: 入力停止から300ms後に検索クエリを更新
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [value]);
 
   useEffect(() => {
     setSelectedIndex(-1);
-  }, [value, isOpen]);
+  }, [debouncedValue, isOpen]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['places-autocomplete', debouncedValue],
+    queryFn: () => routeSearchApi.searchPlaces(debouncedValue),
+    enabled: isOpen && debouncedValue.trim().length > 0,
+    staleTime: 60_000,
+  });
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen || !data?.items.length) return;
@@ -110,7 +119,7 @@ function PlaceAutocompleteInput({
           aria-activedescendant={selectedIndex >= 0 ? `place-option-${selectedIndex}` : undefined}
         />
       </div>
-      {isOpen && value.trim().length > 0 && (
+      {isOpen && debouncedValue.trim().length > 0 && (
         <div className="absolute z-20 w-full rounded-md border bg-popover p-1 text-popover-foreground shadow-md max-h-60 overflow-auto">
           {isFetching ? (
             <p className="px-3 py-2 text-sm text-muted-foreground">場所を検索中...</p>
